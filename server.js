@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const fetch = require('node-fetch');
+const puppeteer = require('puppeteer');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -15,16 +15,15 @@ app.use(cors());
 app.use(express.json());
 
 /**
- * Extract keywords from HTML content with extensive debugging
+ * Extract keywords from HTML content (exact Python logic)
  */
 function extractKeywordsFromHtml(htmlContent) {
   if (!htmlContent) return '';
   
   console.log('🔍 Extracting keywords from HTML...');
-  console.log(`📄 HTML Content Length: ${htmlContent.length} characters`);
   
-  // EXACT Python delimiters
-  const originalDelimiters = [
+  // Same delimiters as your Python version
+  const delimiters = [
     ['&quot;terms&quot;:&quot;', '&quot;,'],
     ['"terms":"', '",'],
     ['terms=', '&'],
@@ -32,192 +31,303 @@ function extractKeywordsFromHtml(htmlContent) {
     ['"keywords":"', '",']
   ];
   
-  console.log('🔍 Checking EXACT Python delimiters...');
-  for (let i = 0; i < originalDelimiters.length; i++) {
-    const [startDelim, endDelim] = originalDelimiters[i];
-    console.log(`🔍 Pattern ${i+1}: Looking for "${startDelim}" followed by "${endDelim}"`);
-    
-    if (htmlContent.includes(startDelim)) {
-      console.log(`✅ Found start delimiter: "${startDelim}"`);
-      const startIndex = htmlContent.indexOf(startDelim);
-      const afterStart = htmlContent.substring(startIndex + startDelim.length);
-      console.log(`📄 Content after start delimiter: "${afterStart.substring(0, 200)}..."`);
-      
-      if (afterStart.includes(endDelim)) {
-        const endIndex = afterStart.indexOf(endDelim);
-        const keywords = afterStart.substring(0, endIndex).trim();
-        console.log(`✅ Found end delimiter. Keywords: "${keywords}"`);
-        
-        if (keywords) {
-          console.log(`✅ SUCCESS: Found keywords with pattern ${i+1}: ${keywords}`);
-          return keywords;
-        } else {
-          console.log(`❌ Keywords empty after extraction`);
-        }
-      } else {
-        console.log(`❌ End delimiter "${endDelim}" not found after start`);
-      }
-    } else {
-      console.log(`❌ Start delimiter "${startDelim}" not found in HTML`);
-    }
-  }
-  
-  // DEBUG: Show actual content around common keywords
-  console.log('\n🔍 DEBUG: Searching for variations of keyword patterns...');
-  
-  // Look for the exact keywords that Python found
-  const pythonKeywords = "Pest And Bug Control Near Me,Pest And Bug Control Nearby,Local Pest Control Miami";
-  if (htmlContent.includes(pythonKeywords)) {
-    console.log(`✅ Found exact Python keywords in HTML!`);
-    const index = htmlContent.indexOf(pythonKeywords);
-    const context = htmlContent.substring(Math.max(0, index - 100), index + pythonKeywords.length + 100);
-    console.log(`📄 Context around keywords: "${context}"`);
-    return pythonKeywords;
-  }
-  
-  // Look for parts of the keywords
-  const keywordParts = ['Pest', 'Bug Control', 'Local Pest Control', 'Miami', 'Near Me'];
-  for (const part of keywordParts) {
-    if (htmlContent.includes(part)) {
-      console.log(`🔍 Found keyword part: "${part}"`);
-      const index = htmlContent.indexOf(part);
-      const context = htmlContent.substring(Math.max(0, index - 50), index + part.length + 50);
-      console.log(`📄 Context: "${context}"`);
-    }
-  }
-  
-  // Look for common patterns that might contain keywords
-  const debugPatterns = [
-    'terms',
-    'keywords', 
-    'keyWords',
-    'query',
-    'search',
-    'pest',
-    'control',
-    'miami',
-    '"Pest',
-    'Pest And Bug',
-    'data-',
-    'window.',
-    'var ',
-    'const ',
-    'let '
-  ];
-  
-  console.log('\n🔍 Pattern frequency analysis:');
-  for (const pattern of debugPatterns) {
-    const regex = new RegExp(pattern, 'gi');
-    const matches = htmlContent.match(regex);
-    if (matches) {
-      console.log(`📊 "${pattern}": ${matches.length} occurrences`);
-      
-      // Show context for the first few matches
-      if (matches.length > 0 && ['terms', 'keywords', 'keyWords', 'pest', 'Pest'].includes(pattern)) {
-        const index = htmlContent.toLowerCase().indexOf(pattern.toLowerCase());
-        if (index !== -1) {
-          const context = htmlContent.substring(Math.max(0, index - 100), index + pattern.length + 100);
-          console.log(`📄 First "${pattern}" context: "${context}"`);
+  for (const [startDelim, endDelim] of delimiters) {
+    try {
+      if (htmlContent.includes(startDelim)) {
+        const startIndex = htmlContent.indexOf(startDelim);
+        if (startIndex !== -1) {
+          const afterStart = htmlContent.substring(startIndex + startDelim.length);
+          const endIndex = afterStart.indexOf(endDelim);
+          if (endIndex !== -1) {
+            const keywords = afterStart.substring(0, endIndex).trim();
+            if (keywords) {
+              console.log(`✅ Found HTML keywords using pattern ${startDelim}: ${keywords.substring(0, 50)}...`);
+              return keywords;
+            }
+          }
         }
       }
+    } catch (error) {
+      continue;
     }
   }
   
-  // Look for JavaScript variables that might contain keywords
-  console.log('\n🔍 Looking for JavaScript variables...');
-  const jsPatterns = [
-    /window\.[\w]+\s*=\s*[^;]+/g,
-    /var\s+[\w]+\s*=\s*[^;]+/g,
-    /const\s+[\w]+\s*=\s*[^;]+/g,
-    /let\s+[\w]+\s*=\s*[^;]+/g
-  ];
-  
-  for (const pattern of jsPatterns) {
-    const matches = htmlContent.match(pattern);
-    if (matches) {
-      console.log(`📊 Found ${matches.length} JS variable declarations`);
-      matches.slice(0, 5).forEach((match, i) => {
-        console.log(`📄 JS var ${i+1}: "${match}"`);
-      });
-    }
-  }
-  
-  // Look for JSON data
-  console.log('\n🔍 Looking for JSON data...');
-  const jsonPatterns = [
-    /{[^}]*"[^"]*(?:terms|keywords|query|search|pest|control)[^"]*"[^}]*}/gi,
-    /"[^"]*(?:terms|keywords|query|search|pest|control)[^"]*"\s*:\s*"[^"]*"/gi
-  ];
-  
-  for (const pattern of jsonPatterns) {
-    const matches = htmlContent.match(pattern);
-    if (matches) {
-      console.log(`📊 Found ${matches.length} potential JSON keyword matches`);
-      matches.slice(0, 3).forEach((match, i) => {
-        console.log(`📄 JSON match ${i+1}: "${match}"`);
-      });
-    }
-  }
-  
-  console.log('❌ No keywords found with any pattern');
+  console.log('❌ No HTML keywords found');
   return '';
 }
 
 /**
- * Process URL with extensive debugging
+ * Accept cookies on page (same as Python accept_cookies)
+ */
+async function acceptCookies(page) {
+  console.log('🍪 Attempting to accept cookies...');
+  
+  const selectors = [
+    'button:has-text("Accept")',
+    'button:has-text("Agree")', 
+    'button:has-text("OK")',
+    'button:has-text("Allow")',
+    'a:has-text("Accept")',
+    'button[class*="accept"]',
+    'button[class*="agree"]',
+    'button[class*="consent"]',
+    '[id*="accept"]',
+    '[id*="consent"]'
+  ];
+  
+  for (const selector of selectors) {
+    try {
+      await page.waitForSelector(selector, { timeout: 3000 });
+      const element = await page.$(selector);
+      if (element) {
+        await element.click();
+        await page.waitForTimeout(1000);
+        console.log('✅ Cookie dialog accepted');
+        return true;
+      }
+    } catch (error) {
+      continue;
+    }
+  }
+  
+  console.log('ℹ️ No cookie dialog found');
+  return false;
+}
+
+/**
+ * Extract surface keywords from spans (only used in EXTENDED_MODE)
+ */
+async function extractSurfaceKeywords(page) {
+  if (!EXTENDED_MODE) {
+    return '';
+  }
+
+  console.log('🎯 Extracting surface keywords from spans...');
+  
+  const kValues = {};
+  
+  try {
+    // Return to main content (same as Python)
+    await page.bringToFront();
+    
+    // Wait for iframe with ID 'master-1' (exact Python logic)
+    try {
+      console.log('🔍 Looking for iframe #master-1...');
+      await page.waitForSelector('#master-1', { timeout: 10000 });
+      
+      const iframeElement = await page.$('#master-1');
+      if (!iframeElement) {
+        console.log('❌ Iframe element not found');
+        return '';
+      }
+      
+      // Switch to found iframe (same as Python)
+      const iframe = await iframeElement.contentFrame();
+      if (!iframe) {
+        console.log('❌ Could not access iframe content');
+        return '';
+      }
+      
+      console.log('✅ Successfully accessed iframe');
+      await page.waitForTimeout(2000);
+      
+      // Search for elements with class "p_.si34.span" (exact Python selector)
+      console.log('🔍 Looking for .p_.si34.span elements...');
+      const elements = await iframe.$$('.p_.si34.span');
+      console.log(`📊 Found ${elements.length} span elements`);
+      
+      // Take max 10 elements (same as Python)
+      const limitedElements = elements.slice(0, 10);
+      
+      // Create k1, k2, ..., k10 (exact Python logic)
+      for (let i = 0; i < 10; i++) {
+        if (i < limitedElements.length) {
+          try {
+            const text = await limitedElements[i].evaluate(el => el.innerText || el.textContent);
+            kValues[`k${i + 1}`] = text ? text.trim() : '';
+            if (text && text.trim()) {
+              console.log(`🔍 k${i + 1}: ${text.trim()}`);
+            }
+          } catch (error) {
+            kValues[`k${i + 1}`] = '';
+          }
+        } else {
+          kValues[`k${i + 1}`] = '';
+        }
+      }
+      
+    } catch (error) {
+      console.log(`❌ Error working with iframe: ${error.message}`);
+      // Fill with empty values (same as Python)
+      for (let i = 1; i <= 10; i++) {
+        kValues[`k${i}`] = '';
+      }
+    }
+    
+  } catch (error) {
+    console.log(`❌ Error in extractSurfaceKeywords: ${error.message}`);
+    // Fill with empty values (same as Python)
+    for (let i = 1; i <= 10; i++) {
+      kValues[`k${i}`] = '';
+    }
+  }
+  
+  // Collect span keywords into one string separated by commas (exact Python logic)
+  const spanKeywordsList = [];
+  for (let i = 1; i <= 10; i++) {
+    const value = kValues[`k${i}`] || '';
+    if (value.trim()) {
+      spanKeywordsList.push(value.trim());
+    }
+  }
+  
+  const keywordsSpanString = spanKeywordsList.join(', ');
+  
+  if (keywordsSpanString) {
+    console.log(`✅ Surface keywords result: ${keywordsSpanString}`);
+  } else {
+    console.log('❌ No surface keywords found');
+  }
+  
+  return keywordsSpanString;
+}
+
+/**
+ * Process URL with Puppeteer (exactly like Python with Playwright)
  */
 async function processUrl(url, country = 'Unknown') {
   console.log(`\n🚀 Processing: ${url}`);
+  console.log(`📋 Mode: ${EXTENDED_MODE ? 'EXTENDED' : 'BASIC'} (Python equivalent: EXTENDED_MODE=${EXTENDED_MODE})`);
   const startTime = Date.now();
   
+  // Browser configuration (same as your Python args)
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-features=VizDisplayCompositor',
+      '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding',
+      '--disable-backgrounding-occluded-windows',
+      '--memory-pressure-off',
+      '--max-old-space-size=512',
+      '--disable-extensions',
+      '--disable-plugins',
+      '--disable-images', // Speed up loading
+    ]
+  });
+  
+  let page;
+  
   try {
-    console.log('📄 Fetching page...');
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      },
-      timeout: 15000
-    });
+    page = await browser.newPage();
     
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    // Set user agent (same as Python)
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    
+    // Set viewport (same as Python)
+    await page.setViewport({ width: 1920, height: 1080 });
+    
+    // Set timeout (15 seconds like Python BROWSER_TIMEOUT)
+    page.setDefaultTimeout(15000);
+    
+    // Load the page with timeout (same as Python)
+    try {
+      console.log('📄 Loading page...');
+      await page.goto(url, { 
+        waitUntil: 'domcontentloaded', 
+        timeout: 15000 
+      });
+      
+      // CRITICAL: Wait for JavaScript to load content (like Python)
+      console.log('⏳ Waiting for JavaScript content to load...');
+      await page.waitForTimeout(5000); // Wait 5 seconds for JS to inject keywords
+      
+      console.log('✅ Page loaded successfully');
+    } catch (timeoutError) {
+      console.log(`⏰ Timeout loading URL ${url}: ${timeoutError.message}`);
+      return {
+        scraped_keywords: '',
+        surface_keywords: '',
+        success: false,
+        error: 'Timeout loading page',
+        processing_time_ms: Date.now() - startTime
+      };
     }
     
-    const htmlContent = await response.text();
-    console.log(`✅ Page fetched (${htmlContent.length} characters)`);
-    
-    // Show more HTML content for debugging
-    console.log(`📄 HTML Start (500 chars): ${htmlContent.substring(0, 500)}`);
-    console.log(`📄 HTML Middle (500 chars): ${htmlContent.substring(Math.floor(htmlContent.length/2), Math.floor(htmlContent.length/2) + 500)}`);
-    console.log(`📄 HTML End (500 chars): ${htmlContent.substring(Math.max(0, htmlContent.length - 500))}`);
-    
-    // Extract keywords with extensive debugging
-    const scrapedKeywords = extractKeywordsFromHtml(htmlContent);
-    
-    const processingTime = Date.now() - startTime;
-    console.log(`⏱️ Processing completed in ${processingTime}ms`);
-    console.log(`📊 Final Results: scraped_keywords="${scrapedKeywords}"`);
-    
-    return {
-      scraped_keywords: scrapedKeywords || '',
-      surface_keywords: '',
-      success: true,
-      error: '',
-      processing_time_ms: processingTime,
-      debug_info: {
-        html_length: htmlContent.length,
-        html_start: htmlContent.substring(0, 300),
-        html_middle: htmlContent.substring(Math.floor(htmlContent.length/2), Math.floor(htmlContent.length/2) + 300),
-        html_end: htmlContent.substring(Math.max(0, htmlContent.length - 300)),
-        patterns_searched: 'Extensive debugging with exact Python patterns'
+    try {
+      // Get original keywords from HTML AFTER JavaScript execution (same as Python)
+      console.log('📊 Getting page source after JavaScript execution...');
+      const pageSource = await page.content();
+      console.log(`📄 Page source length after JS: ${pageSource.length} characters`);
+      
+      let keywordsOriginal = extractKeywordsFromHtml(pageSource);
+      
+      // Get span keywords only in EXTENDED_MODE (like Python)
+      let keywordsSpanString = '';
+      if (EXTENDED_MODE) {
+        console.log('📋 EXTENDED_MODE=true: extracting surface keywords...');
+        keywordsSpanString = await extractSurfaceKeywords(page);
+      } else {
+        console.log('📋 EXTENDED_MODE=false: skipping surface keywords (basic mode like Python)');
       }
-    };
+      
+      // If nothing found - try cookies (same as Python logic)
+      if (!keywordsOriginal && (EXTENDED_MODE ? !keywordsSpanString : true)) {
+        console.log('🔄 No keywords found, trying cookie acceptance...');
+        await acceptCookies(page);
+        await page.waitForTimeout(2000);
+        
+        // Try again after accepting cookies
+        const newPageSource = await page.content();
+        keywordsOriginal = extractKeywordsFromHtml(newPageSource);
+        
+        if (EXTENDED_MODE) {
+          keywordsSpanString = await extractSurfaceKeywords(page);
+        }
+      }
+      
+      const processingTime = Date.now() - startTime;
+      
+      // Log results (same as Python)
+      if (keywordsOriginal) {
+        console.log(`✅ Found scraped keywords: ${keywordsOriginal.substring(0, 100)}...`);
+      }
+      if (EXTENDED_MODE && keywordsSpanString) {
+        console.log(`✅ Found surface keywords: ${keywordsSpanString.substring(0, 100)}...`);
+      }
+      
+      if (!keywordsOriginal && (EXTENDED_MODE ? !keywordsSpanString : true)) {
+        console.log(`❌ No keywords found for URL: ${url}`);
+      }
+      
+      console.log(`⏱️ Processing completed in ${processingTime}ms`);
+      
+      return {
+        scraped_keywords: keywordsOriginal || '',
+        surface_keywords: keywordsSpanString || '',
+        success: true,
+        error: '',
+        processing_time_ms: processingTime,
+        mode: EXTENDED_MODE ? 'EXTENDED' : 'BASIC',
+        method: 'Puppeteer (like Python Playwright)'
+      };
+      
+    } catch (innerError) {
+      console.log(`❌ Error extracting keywords: ${innerError.message}`);
+      return {
+        scraped_keywords: '',
+        surface_keywords: '',
+        success: false,
+        error: innerError.message,
+        processing_time_ms: Date.now() - startTime
+      };
+    }
     
   } catch (error) {
-    console.error(`❌ Error processing ${url}:`, error.message);
+    console.log(`❌ General error processing URL: ${error.message}`);
     return {
       scraped_keywords: '',
       surface_keywords: '',
@@ -225,6 +335,10 @@ async function processUrl(url, country = 'Unknown') {
       error: error.message,
       processing_time_ms: Date.now() - startTime
     };
+  } finally {
+    if (page) await page.close();
+    await browser.close();
+    console.log('🧹 Browser closed');
   }
 }
 
@@ -232,20 +346,20 @@ async function processUrl(url, country = 'Unknown') {
 app.get('/', (req, res) => {
   res.json({
     status: 'alive',
-    message: 'DEBUG Keyword Scraper API',
-    version: '1.2.0-DEBUG',
-    mode: 'DEBUGGING MODE - Extensive logging',
+    message: 'Puppeteer-Based Keyword Scraper API',
+    version: '2.0.0',
+    mode: EXTENDED_MODE ? 'EXTENDED (scraped + surface keywords)' : 'BASIC (scraped keywords only)',
     python_equivalent: `EXTENDED_MODE = ${EXTENDED_MODE}`,
-    type: 'HTTP-only (no browser automation)',
-    note: 'This version logs everything to help find missing keywords',
+    type: 'Browser automation with Puppeteer (like Python Playwright)',
+    note: 'Now uses browser automation to execute JavaScript like Python',
     endpoints: {
-      'POST /extract': 'Extract keywords from a URL with debugging',
+      'POST /extract': 'Extract keywords from a URL using browser automation',
       'GET /': 'Health check'
     }
   });
 });
 
-// Main extraction endpoint  
+// Main extraction endpoint
 app.post('/extract', async (req, res) => {
   console.log('\n=== NEW EXTRACTION REQUEST ===');
   
@@ -261,10 +375,23 @@ app.post('/extract', async (req, res) => {
       });
     }
     
-    console.log(`🔥 Request: ${url} (Country: ${country})`);
-    console.log(`🔍 DEBUG MODE: Will log everything to find missing keywords`);
+    // Validate URL
+    try {
+      new URL(url);
+    } catch (urlError) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid URL format',
+        scraped_keywords: '',
+        surface_keywords: ''
+      });
+    }
     
-    // Process the URL with debugging
+    console.log(`🔥 Request: ${url} (Country: ${country})`);
+    console.log(`📋 Mode: ${EXTENDED_MODE ? 'EXTENDED' : 'BASIC'} (like Python EXTENDED_MODE=${EXTENDED_MODE})`);
+    console.log(`🤖 Method: Puppeteer browser automation (like Python Playwright)`);
+    
+    // Process the URL with Puppeteer
     const result = await processUrl(url, country);
     
     // Return response
@@ -272,14 +399,13 @@ app.post('/extract', async (req, res) => {
       ...result,
       url: url,
       country: country,
-      mode: 'DEBUG',
+      mode: EXTENDED_MODE ? 'EXTENDED' : 'BASIC',
       timestamp: new Date().toISOString(),
-      server: 'render-debug',
-      method: 'HTTP-only',
-      note: 'Check server logs for detailed debugging info'
+      server: 'render-puppeteer',
+      method: 'Puppeteer browser automation'
     };
     
-    console.log(`📤 Response: Success=${result.success}, Found=${!!result.scraped_keywords}`);
+    console.log(`📤 Response: Success=${result.success}, Scraped=${!!result.scraped_keywords}, Surface=${!!result.surface_keywords}`);
     
     res.json(response);
     
@@ -305,9 +431,11 @@ app.use('*', (req, res) => {
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 DEBUG Keyword Scraper API running on port ${PORT}`);
-  console.log(`🔍 DEBUG MODE: Will show extensive logging to find missing keywords`);
-  console.log(`⚡ Method: HTTP requests only (no browser automation like Python)`);
+  console.log(`🚀 Puppeteer-Based Keyword Scraper API running on port ${PORT}`);
+  console.log(`🌐 Health check: http://localhost:${PORT}`);
+  console.log(`📊 Extract endpoint: POST http://localhost:${PORT}/extract`);
+  console.log(`📋 Mode: ${EXTENDED_MODE ? 'EXTENDED' : 'BASIC'} (Python equivalent: EXTENDED_MODE = ${EXTENDED_MODE})`);
+  console.log(`🤖 Method: Puppeteer browser automation (matches Python Playwright approach)`);
 });
 
 module.exports = app;
