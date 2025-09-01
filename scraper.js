@@ -1,5 +1,10 @@
 const puppeteer = require('puppeteer');
 
+// =============================================================================
+// CONFIGURATION - Set mode like Python
+// =============================================================================
+const EXTENDED_MODE = false;  // Set to false for basic mode (like Python)
+
 /**
  * Extract keywords from HTML content (exact Python logic)
  */
@@ -81,7 +86,7 @@ async function acceptCookies(page) {
 }
 
 /**
- * Extract surface keywords from spans (exact Python logic)
+ * Extract surface keywords from spans (exact Python logic) - only used in EXTENDED_MODE
  */
 async function extractSurfaceKeywords(page) {
   console.log('🎯 Extracting surface keywords from spans...');
@@ -136,7 +141,7 @@ async function extractSurfaceKeywords(page) {
             const text = await limitedElements[i].evaluate(el => el.innerText || el.textContent);
             kValues[`k${i + 1}`] = text ? text.trim() : '';
             if (text && text.trim()) {
-              console.log(`📝 k${i + 1}: ${text.trim()}`);
+              console.log(`🔍 k${i + 1}: ${text.trim()}`);
             }
           } catch (error) {
             kValues[`k${i + 1}`] = '';
@@ -187,6 +192,7 @@ async function extractSurfaceKeywords(page) {
  */
 async function processUrl(url, parserCountry = 'Unknown') {
   console.log(`\n🚀 Processing: ${url}`);
+  console.log(`📋 Mode: ${EXTENDED_MODE ? 'EXTENDED' : 'BASIC'} (Python equivalent: EXTENDED_MODE=${EXTENDED_MODE})`);
   const startTime = Date.now();
   
   // Browser configuration (same as your Python args)
@@ -248,11 +254,17 @@ async function processUrl(url, parserCountry = 'Unknown') {
       const pageSource = await page.content();
       let keywordsOriginal = extractKeywordsFromHtml(pageSource);
       
-      // Get span keywords (same as Python EXTENDED_MODE)
-      let keywordsSpanString = await extractSurfaceKeywords(page);
+      // Get span keywords only in EXTENDED_MODE (like Python)
+      let keywordsSpanString = '';
+      if (EXTENDED_MODE) {
+        console.log('📋 EXTENDED_MODE=true: extracting surface keywords...');
+        keywordsSpanString = await extractSurfaceKeywords(page);
+      } else {
+        console.log('📋 EXTENDED_MODE=false: skipping surface keywords (basic mode like Python)');
+      }
       
       // If nothing found - try cookies (same as Python logic)
-      if (!keywordsOriginal && !keywordsSpanString) {
+      if (!keywordsOriginal && (EXTENDED_MODE ? !keywordsSpanString : true)) {
         console.log('🔄 No keywords found, trying cookie acceptance...');
         await acceptCookies(page);
         await page.waitForTimeout(2000);
@@ -260,7 +272,10 @@ async function processUrl(url, parserCountry = 'Unknown') {
         // Try again after accepting cookies
         const newPageSource = await page.content();
         keywordsOriginal = extractKeywordsFromHtml(newPageSource);
-        keywordsSpanString = await extractSurfaceKeywords(page);
+        
+        if (EXTENDED_MODE) {
+          keywordsSpanString = await extractSurfaceKeywords(page);
+        }
       }
       
       const processingTime = Date.now() - startTime;
@@ -269,11 +284,11 @@ async function processUrl(url, parserCountry = 'Unknown') {
       if (keywordsOriginal) {
         console.log(`✅ Found scraped keywords: ${keywordsOriginal.substring(0, 100)}...`);
       }
-      if (keywordsSpanString) {
+      if (EXTENDED_MODE && keywordsSpanString) {
         console.log(`✅ Found surface keywords: ${keywordsSpanString.substring(0, 100)}...`);
       }
       
-      if (!keywordsOriginal && !keywordsSpanString) {
+      if (!keywordsOriginal && (EXTENDED_MODE ? !keywordsSpanString : true)) {
         console.log(`❌ No keywords found for URL: ${url}`);
       }
       
@@ -284,7 +299,8 @@ async function processUrl(url, parserCountry = 'Unknown') {
         surface_keywords: keywordsSpanString || '',
         success: true,
         error: '',
-        processing_time_ms: processingTime
+        processing_time_ms: processingTime,
+        mode: EXTENDED_MODE ? 'EXTENDED' : 'BASIC'
       };
       
     } catch (innerError) {
@@ -314,4 +330,4 @@ async function processUrl(url, parserCountry = 'Unknown') {
   }
 }
 
-module.exports = { processUrl };
+module.exports = { processUrl, EXTENDED_MODE };
