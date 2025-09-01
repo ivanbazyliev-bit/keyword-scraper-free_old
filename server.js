@@ -15,14 +15,15 @@ app.use(cors());
 app.use(express.json());
 
 /**
- * Extract keywords from HTML content (exact same logic as Python)
+ * Extract keywords from HTML content (exact same logic as Python PLUS more patterns)
  */
 function extractKeywordsFromHtml(htmlContent) {
   if (!htmlContent) return '';
   
   console.log('🔍 Extracting keywords from HTML...');
+  console.log(`📄 HTML Content Length: ${htmlContent.length} characters`);
   
-  // Same delimiters as your Python version
+  // Original delimiters from your Python version
   const delimiters = [
     ['&quot;terms&quot;:&quot;', '&quot;,'],
     ['"terms":"', '",'],
@@ -31,6 +32,7 @@ function extractKeywordsFromHtml(htmlContent) {
     ['"keywords":"', '",']
   ];
   
+  // Try original patterns first
   for (const [startDelim, endDelim] of delimiters) {
     try {
       if (htmlContent.includes(startDelim)) {
@@ -41,7 +43,7 @@ function extractKeywordsFromHtml(htmlContent) {
           if (endIndex !== -1) {
             const keywords = afterStart.substring(0, endIndex).trim();
             if (keywords) {
-              console.log(`✅ Found HTML keywords: ${keywords.substring(0, 50)}...`);
+              console.log(`✅ Found HTML keywords using original pattern ${startDelim}: ${keywords.substring(0, 100)}...`);
               return keywords;
             }
           }
@@ -52,12 +54,68 @@ function extractKeywordsFromHtml(htmlContent) {
     }
   }
   
-  console.log('❌ No HTML keywords found');
+  // Additional patterns for better coverage
+  const additionalPatterns = [
+    // Facebook/Meta patterns
+    ['data-keywords="', '"'],
+    ['"keywords":[', ']'],
+    ['keywordsList":[', ']'],
+    // Google patterns
+    ['"q":"', '"'],
+    ['search_terms":', ','],
+    // Generic JSON patterns
+    ['"tags":[', ']'],
+    ['"categories":[', ']'],
+    // URL parameter patterns
+    ['keywords=', '&'],
+    ['terms=', '&'],
+    ['tags=', '&'],
+    // Meta tag patterns in HTML
+    ['name="keywords" content="', '"'],
+    ['name=\'keywords\' content=\'', '\''],
+    // Other common patterns
+    ['"query":"', '"'],
+    ['searchTerm":', ',']
+  ];
+  
+  console.log('🔍 Trying additional patterns...');
+  for (const [startDelim, endDelim] of additionalPatterns) {
+    try {
+      if (htmlContent.includes(startDelim)) {
+        const startIndex = htmlContent.indexOf(startDelim);
+        if (startIndex !== -1) {
+          const afterStart = htmlContent.substring(startIndex + startDelim.length);
+          const endIndex = afterStart.indexOf(endDelim);
+          if (endIndex !== -1) {
+            const keywords = afterStart.substring(0, endIndex).trim();
+            if (keywords && keywords.length > 2) {
+              console.log(`✅ Found HTML keywords using additional pattern ${startDelim}: ${keywords.substring(0, 100)}...`);
+              return keywords;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      continue;
+    }
+  }
+  
+  // Debug: Show what patterns we DO find
+  console.log('🔍 DEBUG: Looking for common patterns in HTML...');
+  const debugPatterns = ['terms', 'keywords', 'query', 'search', 'tags', 'categories'];
+  for (const pattern of debugPatterns) {
+    const count = (htmlContent.match(new RegExp(pattern, 'gi')) || []).length;
+    if (count > 0) {
+      console.log(`📊 Found "${pattern}" ${count} times in HTML`);
+    }
+  }
+  
+  console.log('❌ No HTML keywords found with any pattern');
   return '';
 }
 
 /**
- * Extract basic surface keywords from HTML (only used in EXTENDED_MODE)
+ * Extract basic surface keywords from HTML (enhanced version)
  */
 function extractBasicSurfaceKeywords(htmlContent) {
   if (!htmlContent) return '';
@@ -71,6 +129,7 @@ function extractBasicSurfaceKeywords(htmlContent) {
     const metaKeywordsMatch = htmlContent.match(/<meta[^>]+name=['"]keywords['"][^>]+content=['"]([^'"]+)['"][^>]*>/i);
     if (metaKeywordsMatch) {
       keywords.push(metaKeywordsMatch[1]);
+      console.log(`📋 Found meta keywords: ${metaKeywordsMatch[1]}`);
     }
     
     // Method 2: Meta description words
@@ -78,6 +137,7 @@ function extractBasicSurfaceKeywords(htmlContent) {
     if (metaDescMatch) {
       const descWords = metaDescMatch[1].split(/[,\s]+/).filter(word => word.length > 3);
       keywords.push(...descWords.slice(0, 3));
+      console.log(`📝 Found meta description words: ${descWords.slice(0, 3).join(', ')}`);
     }
     
     // Method 3: Title tag words  
@@ -85,9 +145,22 @@ function extractBasicSurfaceKeywords(htmlContent) {
     if (titleMatch) {
       const titleWords = titleMatch[1].split(/[,\s\-|]+/).filter(word => word.length > 3);
       keywords.push(...titleWords.slice(0, 2));
+      console.log(`📰 Found title words: ${titleWords.slice(0, 2).join(', ')}`);
     }
     
-    // Method 4: Try to find span elements in HTML source
+    // Method 4: URL parameters
+    const urlParams = ['terms', 'keywords', 'query', 'q', 'search', 'tags'];
+    for (const param of urlParams) {
+      const regex = new RegExp(`[?&]${param}=([^&]+)`, 'i');
+      const match = htmlContent.match(regex);
+      if (match) {
+        const value = decodeURIComponent(match[1]);
+        keywords.push(value);
+        console.log(`🔗 Found URL parameter ${param}: ${value}`);
+      }
+    }
+    
+    // Method 5: Try to find span elements in HTML source
     const spanMatches = htmlContent.match(/<span[^>]*class=['"][^'"]*si34[^'"]*span[^'"]*['"][^>]*>([^<]+)<\/span>/gi);
     if (spanMatches) {
       spanMatches.forEach(match => {
@@ -98,9 +171,25 @@ function extractBasicSurfaceKeywords(htmlContent) {
       });
     }
     
+    // Method 6: JSON-LD structured data
+    const jsonLdMatches = htmlContent.match(/<script[^>]+type=['"]application\/ld\+json['"][^>]*>([^<]+)<\/script>/gi);
+    if (jsonLdMatches) {
+      jsonLdMatches.forEach(match => {
+        try {
+          const jsonContent = match.match(/>([^<]+)</)[1];
+          const data = JSON.parse(jsonContent);
+          if (data.keywords) {
+            keywords.push(data.keywords);
+          }
+        } catch (e) {
+          // Ignore JSON parsing errors
+        }
+      });
+    }
+    
     // Remove duplicates and join
     const uniqueKeywords = [...new Set(keywords.filter(k => k && k.trim()))];
-    const result = uniqueKeywords.slice(0, 8).join(', ');
+    const result = uniqueKeywords.slice(0, 10).join(', ');
     
     if (result) {
       console.log(`✅ Found basic surface keywords: ${result}`);
@@ -117,7 +206,7 @@ function extractBasicSurfaceKeywords(htmlContent) {
 }
 
 /**
- * Process URL with HTTP request only
+ * Process URL with HTTP request only (enhanced with debugging)
  */
 async function processUrl(url, country = 'Unknown') {
   console.log(`\n🚀 Processing: ${url}`);
@@ -143,6 +232,9 @@ async function processUrl(url, country = 'Unknown') {
     const htmlContent = await response.text();
     console.log(`✅ Page fetched (${htmlContent.length} characters)`);
     
+    // DEBUG: Show first 500 characters of HTML
+    console.log(`📄 HTML Preview: ${htmlContent.substring(0, 500)}...`);
+    
     // Extract keywords using your exact Python logic
     const scrapedKeywords = extractKeywordsFromHtml(htmlContent);
     
@@ -157,13 +249,19 @@ async function processUrl(url, country = 'Unknown') {
     
     const processingTime = Date.now() - startTime;
     console.log(`⏱️ Processing completed in ${processingTime}ms`);
+    console.log(`📊 Results: scraped_keywords="${scrapedKeywords}", surface_keywords="${surfaceKeywords}"`);
     
     return {
       scraped_keywords: scrapedKeywords || '',
       surface_keywords: surfaceKeywords || '',
       success: true,
       error: '',
-      processing_time_ms: processingTime
+      processing_time_ms: processingTime,
+      debug_info: {
+        html_length: htmlContent.length,
+        html_preview: htmlContent.substring(0, 200),
+        patterns_searched: 'Original + Additional patterns'
+      }
     };
     
   } catch (error) {
@@ -183,10 +281,11 @@ app.get('/', (req, res) => {
   res.json({
     status: 'alive',
     message: 'Lightweight Keyword Scraper API',
-    version: '1.0.0',
+    version: '1.1.0',
     mode: EXTENDED_MODE ? 'EXTENDED (scraped + surface keywords)' : 'BASIC (scraped keywords only)',
     python_equivalent: `EXTENDED_MODE = ${EXTENDED_MODE}`,
     type: 'HTTP-only (no browser automation)',
+    improvements: 'Enhanced patterns + debugging',
     endpoints: {
       'POST /extract': 'Extract keywords from a URL',
       'GET /': 'Health check'
@@ -235,7 +334,7 @@ app.post('/extract', async (req, res) => {
       country: country,
       mode: EXTENDED_MODE ? 'EXTENDED' : 'BASIC',
       timestamp: new Date().toISOString(),
-      server: 'render-lightweight',
+      server: 'render-lightweight-enhanced',
       method: 'HTTP-only'
     };
     
@@ -265,11 +364,12 @@ app.use('*', (req, res) => {
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Lightweight Keyword Scraper API running on port ${PORT}`);
+  console.log(`🚀 Enhanced Keyword Scraper API running on port ${PORT}`);
   console.log(`🌐 Health check: http://localhost:${PORT}`);
   console.log(`📊 Extract endpoint: POST http://localhost:${PORT}/extract`);
   console.log(`📋 Mode: ${EXTENDED_MODE ? 'EXTENDED' : 'BASIC'} (Python equivalent: EXTENDED_MODE = ${EXTENDED_MODE})`);
   console.log(`⚡ Method: HTTP requests only (no browser automation)`);
+  console.log(`🔧 Enhanced: Better patterns + debugging`);
 });
 
 module.exports = app;
