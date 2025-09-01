@@ -15,7 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 /**
- * Extract keywords from HTML content (exact same logic as Python PLUS more patterns)
+ * Extract keywords from HTML content with extensive debugging
  */
 function extractKeywordsFromHtml(htmlContent) {
   if (!htmlContent) return '';
@@ -23,8 +23,8 @@ function extractKeywordsFromHtml(htmlContent) {
   console.log('🔍 Extracting keywords from HTML...');
   console.log(`📄 HTML Content Length: ${htmlContent.length} characters`);
   
-  // Original delimiters from your Python version
-  const delimiters = [
+  // EXACT Python delimiters
+  const originalDelimiters = [
     ['&quot;terms&quot;:&quot;', '&quot;,'],
     ['"terms":"', '",'],
     ['terms=', '&'],
@@ -32,188 +32,145 @@ function extractKeywordsFromHtml(htmlContent) {
     ['"keywords":"', '",']
   ];
   
-  // Try original patterns first
-  for (const [startDelim, endDelim] of delimiters) {
-    try {
-      if (htmlContent.includes(startDelim)) {
-        const startIndex = htmlContent.indexOf(startDelim);
-        if (startIndex !== -1) {
-          const afterStart = htmlContent.substring(startIndex + startDelim.length);
-          const endIndex = afterStart.indexOf(endDelim);
-          if (endIndex !== -1) {
-            const keywords = afterStart.substring(0, endIndex).trim();
-            if (keywords) {
-              console.log(`✅ Found HTML keywords using original pattern ${startDelim}: ${keywords.substring(0, 100)}...`);
-              return keywords;
-            }
-          }
+  console.log('🔍 Checking EXACT Python delimiters...');
+  for (let i = 0; i < originalDelimiters.length; i++) {
+    const [startDelim, endDelim] = originalDelimiters[i];
+    console.log(`🔍 Pattern ${i+1}: Looking for "${startDelim}" followed by "${endDelim}"`);
+    
+    if (htmlContent.includes(startDelim)) {
+      console.log(`✅ Found start delimiter: "${startDelim}"`);
+      const startIndex = htmlContent.indexOf(startDelim);
+      const afterStart = htmlContent.substring(startIndex + startDelim.length);
+      console.log(`📄 Content after start delimiter: "${afterStart.substring(0, 200)}..."`);
+      
+      if (afterStart.includes(endDelim)) {
+        const endIndex = afterStart.indexOf(endDelim);
+        const keywords = afterStart.substring(0, endIndex).trim();
+        console.log(`✅ Found end delimiter. Keywords: "${keywords}"`);
+        
+        if (keywords) {
+          console.log(`✅ SUCCESS: Found keywords with pattern ${i+1}: ${keywords}`);
+          return keywords;
+        } else {
+          console.log(`❌ Keywords empty after extraction`);
         }
+      } else {
+        console.log(`❌ End delimiter "${endDelim}" not found after start`);
       }
-    } catch (error) {
-      continue;
+    } else {
+      console.log(`❌ Start delimiter "${startDelim}" not found in HTML`);
     }
   }
   
-  // Additional patterns for better coverage
-  const additionalPatterns = [
-    // Facebook/Meta patterns
-    ['data-keywords="', '"'],
-    ['"keywords":[', ']'],
-    ['keywordsList":[', ']'],
-    // Google patterns
-    ['"q":"', '"'],
-    ['search_terms":', ','],
-    // Generic JSON patterns
-    ['"tags":[', ']'],
-    ['"categories":[', ']'],
-    // URL parameter patterns
-    ['keywords=', '&'],
-    ['terms=', '&'],
-    ['tags=', '&'],
-    // Meta tag patterns in HTML
-    ['name="keywords" content="', '"'],
-    ['name=\'keywords\' content=\'', '\''],
-    // Other common patterns
-    ['"query":"', '"'],
-    ['searchTerm":', ',']
+  // DEBUG: Show actual content around common keywords
+  console.log('\n🔍 DEBUG: Searching for variations of keyword patterns...');
+  
+  // Look for the exact keywords that Python found
+  const pythonKeywords = "Pest And Bug Control Near Me,Pest And Bug Control Nearby,Local Pest Control Miami";
+  if (htmlContent.includes(pythonKeywords)) {
+    console.log(`✅ Found exact Python keywords in HTML!`);
+    const index = htmlContent.indexOf(pythonKeywords);
+    const context = htmlContent.substring(Math.max(0, index - 100), index + pythonKeywords.length + 100);
+    console.log(`📄 Context around keywords: "${context}"`);
+    return pythonKeywords;
+  }
+  
+  // Look for parts of the keywords
+  const keywordParts = ['Pest', 'Bug Control', 'Local Pest Control', 'Miami', 'Near Me'];
+  for (const part of keywordParts) {
+    if (htmlContent.includes(part)) {
+      console.log(`🔍 Found keyword part: "${part}"`);
+      const index = htmlContent.indexOf(part);
+      const context = htmlContent.substring(Math.max(0, index - 50), index + part.length + 50);
+      console.log(`📄 Context: "${context}"`);
+    }
+  }
+  
+  // Look for common patterns that might contain keywords
+  const debugPatterns = [
+    'terms',
+    'keywords', 
+    'keyWords',
+    'query',
+    'search',
+    'pest',
+    'control',
+    'miami',
+    '"Pest',
+    'Pest And Bug',
+    'data-',
+    'window.',
+    'var ',
+    'const ',
+    'let '
   ];
   
-  console.log('🔍 Trying additional patterns...');
-  for (const [startDelim, endDelim] of additionalPatterns) {
-    try {
-      if (htmlContent.includes(startDelim)) {
-        const startIndex = htmlContent.indexOf(startDelim);
-        if (startIndex !== -1) {
-          const afterStart = htmlContent.substring(startIndex + startDelim.length);
-          const endIndex = afterStart.indexOf(endDelim);
-          if (endIndex !== -1) {
-            const keywords = afterStart.substring(0, endIndex).trim();
-            if (keywords && keywords.length > 2) {
-              console.log(`✅ Found HTML keywords using additional pattern ${startDelim}: ${keywords.substring(0, 100)}...`);
-              return keywords;
-            }
-          }
+  console.log('\n🔍 Pattern frequency analysis:');
+  for (const pattern of debugPatterns) {
+    const regex = new RegExp(pattern, 'gi');
+    const matches = htmlContent.match(regex);
+    if (matches) {
+      console.log(`📊 "${pattern}": ${matches.length} occurrences`);
+      
+      // Show context for the first few matches
+      if (matches.length > 0 && ['terms', 'keywords', 'keyWords', 'pest', 'Pest'].includes(pattern)) {
+        const index = htmlContent.toLowerCase().indexOf(pattern.toLowerCase());
+        if (index !== -1) {
+          const context = htmlContent.substring(Math.max(0, index - 100), index + pattern.length + 100);
+          console.log(`📄 First "${pattern}" context: "${context}"`);
         }
       }
-    } catch (error) {
-      continue;
     }
   }
   
-  // Debug: Show what patterns we DO find
-  console.log('🔍 DEBUG: Looking for common patterns in HTML...');
-  const debugPatterns = ['terms', 'keywords', 'query', 'search', 'tags', 'categories'];
-  for (const pattern of debugPatterns) {
-    const count = (htmlContent.match(new RegExp(pattern, 'gi')) || []).length;
-    if (count > 0) {
-      console.log(`📊 Found "${pattern}" ${count} times in HTML`);
+  // Look for JavaScript variables that might contain keywords
+  console.log('\n🔍 Looking for JavaScript variables...');
+  const jsPatterns = [
+    /window\.[\w]+\s*=\s*[^;]+/g,
+    /var\s+[\w]+\s*=\s*[^;]+/g,
+    /const\s+[\w]+\s*=\s*[^;]+/g,
+    /let\s+[\w]+\s*=\s*[^;]+/g
+  ];
+  
+  for (const pattern of jsPatterns) {
+    const matches = htmlContent.match(pattern);
+    if (matches) {
+      console.log(`📊 Found ${matches.length} JS variable declarations`);
+      matches.slice(0, 5).forEach((match, i) => {
+        console.log(`📄 JS var ${i+1}: "${match}"`);
+      });
     }
   }
   
-  console.log('❌ No HTML keywords found with any pattern');
+  // Look for JSON data
+  console.log('\n🔍 Looking for JSON data...');
+  const jsonPatterns = [
+    /{[^}]*"[^"]*(?:terms|keywords|query|search|pest|control)[^"]*"[^}]*}/gi,
+    /"[^"]*(?:terms|keywords|query|search|pest|control)[^"]*"\s*:\s*"[^"]*"/gi
+  ];
+  
+  for (const pattern of jsonPatterns) {
+    const matches = htmlContent.match(pattern);
+    if (matches) {
+      console.log(`📊 Found ${matches.length} potential JSON keyword matches`);
+      matches.slice(0, 3).forEach((match, i) => {
+        console.log(`📄 JSON match ${i+1}: "${match}"`);
+      });
+    }
+  }
+  
+  console.log('❌ No keywords found with any pattern');
   return '';
 }
 
 /**
- * Extract basic surface keywords from HTML (enhanced version)
- */
-function extractBasicSurfaceKeywords(htmlContent) {
-  if (!htmlContent) return '';
-  
-  console.log('🎯 Extracting basic surface keywords...');
-  
-  try {
-    const keywords = [];
-    
-    // Method 1: Meta keywords
-    const metaKeywordsMatch = htmlContent.match(/<meta[^>]+name=['"]keywords['"][^>]+content=['"]([^'"]+)['"][^>]*>/i);
-    if (metaKeywordsMatch) {
-      keywords.push(metaKeywordsMatch[1]);
-      console.log(`📋 Found meta keywords: ${metaKeywordsMatch[1]}`);
-    }
-    
-    // Method 2: Meta description words
-    const metaDescMatch = htmlContent.match(/<meta[^>]+name=['"]description['"][^>]+content=['"]([^'"]+)['"][^>]*>/i);
-    if (metaDescMatch) {
-      const descWords = metaDescMatch[1].split(/[,\s]+/).filter(word => word.length > 3);
-      keywords.push(...descWords.slice(0, 3));
-      console.log(`📝 Found meta description words: ${descWords.slice(0, 3).join(', ')}`);
-    }
-    
-    // Method 3: Title tag words  
-    const titleMatch = htmlContent.match(/<title[^>]*>([^<]+)<\/title>/i);
-    if (titleMatch) {
-      const titleWords = titleMatch[1].split(/[,\s\-|]+/).filter(word => word.length > 3);
-      keywords.push(...titleWords.slice(0, 2));
-      console.log(`📰 Found title words: ${titleWords.slice(0, 2).join(', ')}`);
-    }
-    
-    // Method 4: URL parameters
-    const urlParams = ['terms', 'keywords', 'query', 'q', 'search', 'tags'];
-    for (const param of urlParams) {
-      const regex = new RegExp(`[?&]${param}=([^&]+)`, 'i');
-      const match = htmlContent.match(regex);
-      if (match) {
-        const value = decodeURIComponent(match[1]);
-        keywords.push(value);
-        console.log(`🔗 Found URL parameter ${param}: ${value}`);
-      }
-    }
-    
-    // Method 5: Try to find span elements in HTML source
-    const spanMatches = htmlContent.match(/<span[^>]*class=['"][^'"]*si34[^'"]*span[^'"]*['"][^>]*>([^<]+)<\/span>/gi);
-    if (spanMatches) {
-      spanMatches.forEach(match => {
-        const textMatch = match.match(/>([^<]+)</);
-        if (textMatch && textMatch[1].trim()) {
-          keywords.push(textMatch[1].trim());
-        }
-      });
-    }
-    
-    // Method 6: JSON-LD structured data
-    const jsonLdMatches = htmlContent.match(/<script[^>]+type=['"]application\/ld\+json['"][^>]*>([^<]+)<\/script>/gi);
-    if (jsonLdMatches) {
-      jsonLdMatches.forEach(match => {
-        try {
-          const jsonContent = match.match(/>([^<]+)</)[1];
-          const data = JSON.parse(jsonContent);
-          if (data.keywords) {
-            keywords.push(data.keywords);
-          }
-        } catch (e) {
-          // Ignore JSON parsing errors
-        }
-      });
-    }
-    
-    // Remove duplicates and join
-    const uniqueKeywords = [...new Set(keywords.filter(k => k && k.trim()))];
-    const result = uniqueKeywords.slice(0, 10).join(', ');
-    
-    if (result) {
-      console.log(`✅ Found basic surface keywords: ${result}`);
-    } else {
-      console.log('❌ No basic surface keywords found');
-    }
-    
-    return result;
-    
-  } catch (error) {
-    console.error('Error extracting basic surface keywords:', error);
-    return '';
-  }
-}
-
-/**
- * Process URL with HTTP request only (enhanced with debugging)
+ * Process URL with extensive debugging
  */
 async function processUrl(url, country = 'Unknown') {
   console.log(`\n🚀 Processing: ${url}`);
   const startTime = Date.now();
   
   try {
-    // Fetch page with HTTP request
     console.log('📄 Fetching page...');
     const response = await fetch(url, {
       method: 'GET',
@@ -232,35 +189,30 @@ async function processUrl(url, country = 'Unknown') {
     const htmlContent = await response.text();
     console.log(`✅ Page fetched (${htmlContent.length} characters)`);
     
-    // DEBUG: Show first 500 characters of HTML
-    console.log(`📄 HTML Preview: ${htmlContent.substring(0, 500)}...`);
+    // Show more HTML content for debugging
+    console.log(`📄 HTML Start (500 chars): ${htmlContent.substring(0, 500)}`);
+    console.log(`📄 HTML Middle (500 chars): ${htmlContent.substring(Math.floor(htmlContent.length/2), Math.floor(htmlContent.length/2) + 500)}`);
+    console.log(`📄 HTML End (500 chars): ${htmlContent.substring(Math.max(0, htmlContent.length - 500))}`);
     
-    // Extract keywords using your exact Python logic
+    // Extract keywords with extensive debugging
     const scrapedKeywords = extractKeywordsFromHtml(htmlContent);
-    
-    // Only extract surface keywords in EXTENDED_MODE (like Python)
-    let surfaceKeywords = '';
-    if (EXTENDED_MODE) {
-      surfaceKeywords = extractBasicSurfaceKeywords(htmlContent);
-      console.log(`📋 Mode: EXTENDED - extracting surface keywords`);
-    } else {
-      console.log(`📋 Mode: BASIC - skipping surface keywords (like Python EXTENDED_MODE=False)`);
-    }
     
     const processingTime = Date.now() - startTime;
     console.log(`⏱️ Processing completed in ${processingTime}ms`);
-    console.log(`📊 Results: scraped_keywords="${scrapedKeywords}", surface_keywords="${surfaceKeywords}"`);
+    console.log(`📊 Final Results: scraped_keywords="${scrapedKeywords}"`);
     
     return {
       scraped_keywords: scrapedKeywords || '',
-      surface_keywords: surfaceKeywords || '',
+      surface_keywords: '',
       success: true,
       error: '',
       processing_time_ms: processingTime,
       debug_info: {
         html_length: htmlContent.length,
-        html_preview: htmlContent.substring(0, 200),
-        patterns_searched: 'Original + Additional patterns'
+        html_start: htmlContent.substring(0, 300),
+        html_middle: htmlContent.substring(Math.floor(htmlContent.length/2), Math.floor(htmlContent.length/2) + 300),
+        html_end: htmlContent.substring(Math.max(0, htmlContent.length - 300)),
+        patterns_searched: 'Extensive debugging with exact Python patterns'
       }
     };
     
@@ -280,20 +232,20 @@ async function processUrl(url, country = 'Unknown') {
 app.get('/', (req, res) => {
   res.json({
     status: 'alive',
-    message: 'Lightweight Keyword Scraper API',
-    version: '1.1.0',
-    mode: EXTENDED_MODE ? 'EXTENDED (scraped + surface keywords)' : 'BASIC (scraped keywords only)',
+    message: 'DEBUG Keyword Scraper API',
+    version: '1.2.0-DEBUG',
+    mode: 'DEBUGGING MODE - Extensive logging',
     python_equivalent: `EXTENDED_MODE = ${EXTENDED_MODE}`,
     type: 'HTTP-only (no browser automation)',
-    improvements: 'Enhanced patterns + debugging',
+    note: 'This version logs everything to help find missing keywords',
     endpoints: {
-      'POST /extract': 'Extract keywords from a URL',
+      'POST /extract': 'Extract keywords from a URL with debugging',
       'GET /': 'Health check'
     }
   });
 });
 
-// Main extraction endpoint
+// Main extraction endpoint  
 app.post('/extract', async (req, res) => {
   console.log('\n=== NEW EXTRACTION REQUEST ===');
   
@@ -309,22 +261,10 @@ app.post('/extract', async (req, res) => {
       });
     }
     
-    // Validate URL
-    try {
-      new URL(url);
-    } catch (urlError) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid URL format',
-        scraped_keywords: '',
-        surface_keywords: ''
-      });
-    }
-    
     console.log(`🔥 Request: ${url} (Country: ${country})`);
-    console.log(`📋 Mode: ${EXTENDED_MODE ? 'EXTENDED' : 'BASIC'} (like Python EXTENDED_MODE=${EXTENDED_MODE})`);
+    console.log(`🔍 DEBUG MODE: Will log everything to find missing keywords`);
     
-    // Process the URL
+    // Process the URL with debugging
     const result = await processUrl(url, country);
     
     // Return response
@@ -332,13 +272,14 @@ app.post('/extract', async (req, res) => {
       ...result,
       url: url,
       country: country,
-      mode: EXTENDED_MODE ? 'EXTENDED' : 'BASIC',
+      mode: 'DEBUG',
       timestamp: new Date().toISOString(),
-      server: 'render-lightweight-enhanced',
-      method: 'HTTP-only'
+      server: 'render-debug',
+      method: 'HTTP-only',
+      note: 'Check server logs for detailed debugging info'
     };
     
-    console.log(`📤 Response: Success=${result.success}, Scraped=${!!result.scraped_keywords}, Surface=${!!result.surface_keywords}`);
+    console.log(`📤 Response: Success=${result.success}, Found=${!!result.scraped_keywords}`);
     
     res.json(response);
     
@@ -364,12 +305,9 @@ app.use('*', (req, res) => {
 
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Enhanced Keyword Scraper API running on port ${PORT}`);
-  console.log(`🌐 Health check: http://localhost:${PORT}`);
-  console.log(`📊 Extract endpoint: POST http://localhost:${PORT}/extract`);
-  console.log(`📋 Mode: ${EXTENDED_MODE ? 'EXTENDED' : 'BASIC'} (Python equivalent: EXTENDED_MODE = ${EXTENDED_MODE})`);
-  console.log(`⚡ Method: HTTP requests only (no browser automation)`);
-  console.log(`🔧 Enhanced: Better patterns + debugging`);
+  console.log(`🚀 DEBUG Keyword Scraper API running on port ${PORT}`);
+  console.log(`🔍 DEBUG MODE: Will show extensive logging to find missing keywords`);
+  console.log(`⚡ Method: HTTP requests only (no browser automation like Python)`);
 });
 
 module.exports = app;
