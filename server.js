@@ -5,12 +5,17 @@ const fetch = require('node-fetch');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
+// =============================================================================
+// CONFIGURATION - Set mode like Python
+// =============================================================================
+const EXTENDED_MODE = false;  // Set to false for basic mode (like Python)
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 /**
- * Extract keywords from HTML content (exact same logic as your Python)
+ * Extract keywords from HTML content (exact same logic as Python)
  */
 function extractKeywordsFromHtml(htmlContent) {
   if (!htmlContent) return '';
@@ -52,7 +57,7 @@ function extractKeywordsFromHtml(htmlContent) {
 }
 
 /**
- * Extract basic surface keywords from HTML (limited version)
+ * Extract basic surface keywords from HTML (only used in EXTENDED_MODE)
  */
 function extractBasicSurfaceKeywords(htmlContent) {
   if (!htmlContent) return '';
@@ -140,7 +145,15 @@ async function processUrl(url, country = 'Unknown') {
     
     // Extract keywords using your exact Python logic
     const scrapedKeywords = extractKeywordsFromHtml(htmlContent);
-    const surfaceKeywords = extractBasicSurfaceKeywords(htmlContent);
+    
+    // Only extract surface keywords in EXTENDED_MODE (like Python)
+    let surfaceKeywords = '';
+    if (EXTENDED_MODE) {
+      surfaceKeywords = extractBasicSurfaceKeywords(htmlContent);
+      console.log(`📋 Mode: EXTENDED - extracting surface keywords`);
+    } else {
+      console.log(`📋 Mode: BASIC - skipping surface keywords (like Python EXTENDED_MODE=False)`);
+    }
     
     const processingTime = Date.now() - startTime;
     console.log(`⏱️ Processing completed in ${processingTime}ms`);
@@ -171,6 +184,8 @@ app.get('/', (req, res) => {
     status: 'alive',
     message: 'Lightweight Keyword Scraper API',
     version: '1.0.0',
+    mode: EXTENDED_MODE ? 'EXTENDED (scraped + surface keywords)' : 'BASIC (scraped keywords only)',
+    python_equivalent: `EXTENDED_MODE = ${EXTENDED_MODE}`,
     type: 'HTTP-only (no browser automation)',
     endpoints: {
       'POST /extract': 'Extract keywords from a URL',
@@ -207,7 +222,8 @@ app.post('/extract', async (req, res) => {
       });
     }
     
-    console.log(`📥 Request: ${url} (Country: ${country})`);
+    console.log(`🔥 Request: ${url} (Country: ${country})`);
+    console.log(`📋 Mode: ${EXTENDED_MODE ? 'EXTENDED' : 'BASIC'} (like Python EXTENDED_MODE=${EXTENDED_MODE})`);
     
     // Process the URL
     const result = await processUrl(url, country);
@@ -217,6 +233,7 @@ app.post('/extract', async (req, res) => {
       ...result,
       url: url,
       country: country,
+      mode: EXTENDED_MODE ? 'EXTENDED' : 'BASIC',
       timestamp: new Date().toISOString(),
       server: 'render-lightweight',
       method: 'HTTP-only'
@@ -251,6 +268,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Lightweight Keyword Scraper API running on port ${PORT}`);
   console.log(`🌐 Health check: http://localhost:${PORT}`);
   console.log(`📊 Extract endpoint: POST http://localhost:${PORT}/extract`);
+  console.log(`📋 Mode: ${EXTENDED_MODE ? 'EXTENDED' : 'BASIC'} (Python equivalent: EXTENDED_MODE = ${EXTENDED_MODE})`);
   console.log(`⚡ Method: HTTP requests only (no browser automation)`);
 });
 
